@@ -35,6 +35,22 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
 
+def get_projects(meta):
+
+    """Return a list of all projects in the database"""
+
+    projects = []
+    volumes_t = Table('volumes', meta, autoload=True)
+    volumes_q = select(columns=[volumes_t.c.project_id,
+                                func.count()],
+                       whereclause=and_(volumes_t.c.deleted == 0),
+                       group_by=volumes_t.c.project_id)
+    for (project, _) in volumes_q.execute():
+        projects.append(project)
+
+    return projects
+
+
 def yn_choice():
 
     """Return True/False after checking with the user"""
@@ -67,7 +83,7 @@ def sync_quota_usages_project(meta, project_id, quota_usages_to_sync):
             updated_at=now, in_use=quota).execute()
 
 
-def get_real_usages_project(meta, project_id, sync=False):
+def get_real_usages_project(meta, project_id):
 
     """Return the real resource usages of a project"""
 
@@ -80,7 +96,7 @@ def get_real_usages_project(meta, project_id, sync=False):
     return volumes_q.execute()
 
 
-def get_quota_usages_project(meta, project_id, sync=False):
+def get_quota_usages_project(meta, project_id):
 
     """Return the quota usages of a project"""
 
@@ -93,7 +109,7 @@ def get_quota_usages_project(meta, project_id, sync=False):
     return quota_usages_q.execute()
 
 
-def get_resource_types(meta, project_id, sync=False):
+def get_resource_types(meta, project_id):
 
     """Return a list of all resource types"""
 
@@ -108,7 +124,7 @@ def get_resource_types(meta, project_id, sync=False):
     return types
 
 
-def get_volume_types(meta, project_id, sync=False):
+def get_volume_types(meta, project_id):
 
     """Return a dict with volume type id to name mapping"""
 
@@ -153,18 +169,22 @@ def get_db_url(config_file):
 
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sync",
-                        action="store_true",
-                        help="always sync resources (no interactive check)")
-    parser.add_argument("--nosync",
-                        action="store_true",
-                        help="never sync resources (no interactive check)")
-    parser.add_argument("project_id",
-                        type=str,
-                        help="project to check")
     parser.add_argument("--config",
                         default='./cinder.conf',
                         help='configuration file')
+    parser.add_argument("--nosync",
+                        action="store_true",
+                        help="never sync resources (no interactive check)")
+    parser.add_argument("--sync",
+                        action="store_true",
+                        help="always sync resources (no interactive check)")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--list_projects",
+                       action="store_true",
+                       help='get a list of all projects in the database')
+    group.add_argument("--project_id",
+                       type=str,
+                       help="project to check")
     return parser.parse_args()
 
 
@@ -174,27 +194,33 @@ def main():
     except Exception as e:
         sys.stdout.write("Check command line arguments (%s)" % e.strerror)
 
-    print "Checking " + args.project_id + " ..."
-
     # connect to the DB
     db_url = get_db_url(args.config)
     cinder_session, cinder_metadata, cinder_Base = makeConnection(db_url)
 
     # get the volume types
     volume_types = get_volume_types(cinder_metadata,
-                                    args.project_id,
-                                    args.sync)
+                                    args.project_id)
 
     # get the resource types
     resource_types = get_resource_types(cinder_metadata,
-                                        args.project_id,
-                                        args.sync)
+                                        args.project_id)
 
-    # get the quota usage of a project
+    # check/sync all projects found in the database
+    #
+    if args.list_projects:
+        for p in get_projects(cinder_metadata):
+            print p
+        sys.exit(0)
+
+    # check a single project
+    #
+    print "Checking " + args.project_id + " ..."
+
+    # get the age of a project
     quota_usages = {}
     for (resource, count) in get_quota_usages_project(cinder_metadata,
-                                                      args.project_id,
-                                                      args.sync):
+                                                      args.project_id):
         quota_usages[resource] = count
 
     # get the real usage of a project
