@@ -83,9 +83,23 @@ def sync_quota_usages_project(meta, project_id, quota_usages_to_sync):
             updated_at=now, in_use=quota).execute()
 
 
-def get_real_usages_project(meta, project_id):
+def get_snapshot_usages_project(meta, project_id):
 
-    """Return the real resource usages of a project"""
+    """Return the snapshot resource usages of a project"""
+
+    snapshots_t = Table('snapshots', meta, autoload=True)
+    snapshots_q = select(columns=[snapshots_t.c.id,
+                                  snapshots_t.c.volume_size,
+                                  snapshots_t.c.volume_type_id],
+                         whereclause=and_(
+                         snapshots_t.c.deleted == 0,
+                         snapshots_t.c.project_id == project_id))
+    return snapshots_q.execute()
+
+
+def get_volume_usages_project(meta, project_id):
+
+    """Return the volume resource usages of a project"""
 
     volumes_t = Table('volumes', meta, autoload=True)
     volumes_q = select(columns=[volumes_t.c.id,
@@ -227,10 +241,16 @@ def main():
     real_usages = {}
     for resource in resource_types:
         real_usages[resource] = 0
-    for (_, size, type_id) in get_real_usages_project(cinder_metadata,
-                                                      args.project_id):
+    for (_, size, type_id) in get_volume_usages_project(cinder_metadata,
+                                                        args.project_id):
         real_usages["volumes"] += 1
         real_usages["volumes_" + volume_types[type_id]] += 1
+        real_usages["gigabytes"] += size
+        real_usages["gigabytes_" + volume_types[type_id]] += size
+    for (_, size, type_id) in get_snapshot_usages_project(cinder_metadata,
+                                                          args.project_id):
+        real_usages["snapshots"] += 1
+        real_usages["snapshots_" + volume_types[type_id]] += 1
         real_usages["gigabytes"] += size
         real_usages["gigabytes_" + volume_types[type_id]] += size
 
@@ -238,13 +258,10 @@ def main():
     ptable = PrettyTable(["Project ID", "Resource", "Quota -> Real",
                          "Sync Status"])
 
-    # find discepancies between quota usage and real usage
+    # find discrepancies between quota usage and real usage
     quota_usages_to_sync = {}
     for resource in resource_types:
         try:
-            # FIXME: ignore snapshots for now
-            if resource.startswith('snap'):
-                continue
             if real_usages[resource] != quota_usages[resource]:
                 quota_usages_to_sync[resource] = real_usages[resource]
                 ptable.add_row([args.project_id, resource,
