@@ -231,7 +231,7 @@ def main():
     #
     print "Checking " + args.project_id + " ..."
 
-    # get the age of a project
+    # get the quota usage of a project
     quota_usages = {}
     for (resource, count) in get_quota_usages_project(cinder_metadata,
                                                       args.project_id):
