@@ -53,8 +53,8 @@ List all project which have entries in the Cinder database
 $ python cinder-quota-sync --list_projects
 
 
-Nova versions supported
------------------------
+Cinder versions supported
+-------------------------
 
 Tested with Ocata.
 
