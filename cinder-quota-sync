@@ -241,15 +241,15 @@ def main():
     for (_, size, type_id) in get_volume_usages_project(cinder_metadata,
                                                         args.project_id):
         real_usages["volumes"] += 1
-        real_usages["volumes_" + volume_types[type_id]] += 1
+        real_usages["volumes_" + volume_types[type_id]] = real_usages.get("volumes_" + volume_types[type_id], 0) + 1
         real_usages["gigabytes"] += size
-        real_usages["gigabytes_" + volume_types[type_id]] += size
+        real_usages["gigabytes_" + volume_types[type_id]] = real_usages.get("gigabytes_" + volume_types[type_id], 0) + size
     for (_, size, type_id) in get_snapshot_usages_project(cinder_metadata,
                                                           args.project_id):
         real_usages["snapshots"] += 1
-        real_usages["snapshots_" + volume_types[type_id]] += 1
+        real_usages["snapshots_" + volume_types[type_id]] = real_usages.get("snapshots_" + volume_types[type_id], 0) + 1
         real_usages["gigabytes"] += size
-        real_usages["gigabytes_" + volume_types[type_id]] += size
+        real_usages["gigabytes_" + volume_types[type_id]] = real_usages.get("gigabytes_" + volume_types[type_id], 0) + size
 
     # prepare the output
     ptable = PrettyTable(["Project ID", "Resource", "Quota -> Real",
